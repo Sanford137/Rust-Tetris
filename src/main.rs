@@ -2,7 +2,7 @@ use std::ops::ControlFlow;
 // use rand::prelude::*;
 use tetra::graphics::scaling::{ScalingMode, ScreenScaler};
 use tetra::graphics::{self, Color, DrawParams, Texture};
-// use tetra::input::{self, Key};
+use tetra::input::{self, Key};
 use tetra::math::Vec2;
 // use tetra::window;
 use tetra::{Context, ContextBuilder, Event, State};
@@ -20,12 +20,12 @@ enum Rotation {
     R270,
 }
 
-fn main() -> tetra::Result {
-    ContextBuilder::new("Tetris", WINDOW_WIDTH as i32, WINDOW_HEIGHT as i32)
-        .quit_on_escape(true)
-        .resizable(true)
-        .build()?
-        .run(GameState::new)
+struct GameState {
+    block_texture: Texture,
+    scaler: ScreenScaler,
+    lines: [Line; 15],
+    active_piece: Box<dyn Piece>,
+    velocity: f32,
 }
 
 impl State for GameState {
@@ -110,20 +110,18 @@ impl State for GameState {
     }
 
     fn event(&mut self, _: &mut Context, event: Event) -> tetra::Result {
-        if let Event::Resized { width, height } = event {
-            self.scaler.set_outer_size(width, height);
+        match event {
+            Event::Resized{ width, height } => {
+                self.scaler.set_outer_size(width, height);
+            },
+            Event::KeyPressed{ key: key @ (Key::Right | Key::Left)}  => {
+                self.move_piece(key);
+            },
+            _ => ()
         }
 
         Ok(())
     }
-}
-
-struct GameState {
-    block_texture: Texture,
-    scaler: ScreenScaler,
-    lines: [Line; 15],
-    active_piece: Box<dyn Piece>,
-    velocity: f32,
 }
 
 impl GameState {
@@ -169,9 +167,11 @@ impl GameState {
 
 
     fn next_piece(&mut self) {
-        self.active_piece.blocks_mut().iter().for_each(|block| {
+        self.active_piece.blocks_mut().iter_mut().for_each(|block| {
 
             let line_num = block.y_pos_top as i32 / 30;
+
+            block.y_pos_top = (self.lines[line_num as usize].row * 30) as f32;
 
             self.lines[line_num as usize].blocks[block.col as usize] = Some(*block);
         });
@@ -200,6 +200,29 @@ impl GameState {
                 },
             ],
             rotation: Rotation::R0,
+        });
+    }
+
+    fn move_piece(&mut self, key: Key) {
+        let mut atBoundary = false;
+        self.active_piece.blocks().iter().try_for_each(|block| {
+            if block.col == 0 && key == Key::Left  || block.col == 9 && key == Key::Right {
+                atBoundary = true;
+                return ControlFlow::Break(())
+            }
+            ControlFlow::Continue(())
+        });
+
+        if atBoundary {
+            return
+        }
+
+        self.active_piece.blocks_mut().iter_mut().for_each(|block| {
+            match key {
+                Key::Left => { block.col -= 1 },
+                Key::Right => { block.col += 1 },
+                _ => panic!("unexpected key type encountered: {:?} ", key),
+            }
         });
     }
 }
@@ -248,6 +271,15 @@ impl Block {
 struct Line {
     row: u32,
     blocks: [Option<Block>; 10],
+}
+
+
+fn main() -> tetra::Result {
+    ContextBuilder::new("Tetris", WINDOW_WIDTH as i32, WINDOW_HEIGHT as i32)
+        .quit_on_escape(true)
+        .resizable(true)
+        .build()?
+        .run(GameState::new)
 }
 
 // impl Entity {
