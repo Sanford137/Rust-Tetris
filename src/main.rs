@@ -1,14 +1,15 @@
+use std::ops::ControlFlow;
 // use rand::prelude::*;
 use tetra::graphics::scaling::{ScalingMode, ScreenScaler};
-use tetra::graphics::{self, Color, DrawParams, Rectangle, Texture};
+use tetra::graphics::{self, Color, DrawParams, Texture};
 // use tetra::input::{self, Key};
 use tetra::math::Vec2;
-use tetra::window;
+// use tetra::window;
 use tetra::{Context, ContextBuilder, Event, State};
 // use image::GenericImageView;
 
 const WINDOW_WIDTH: i32 = 300;
-const WINDOW_HEIGHT: i32 = 550;
+const WINDOW_HEIGHT: i32 = 450;
 
 type Point2 = Vec2<f32>;
 
@@ -29,9 +30,42 @@ fn main() -> tetra::Result {
 
 impl State for GameState {
     fn update(&mut self, ctx: &mut Context) -> tetra::Result {
-        self.active_piece.blocks().iter_mut().for_each(|block| {
-            block.position.y += self.velocity
+        self.active_piece.blocks_mut().iter_mut().for_each(|block| {
+            block.y_pos_top += self.velocity
         });
+
+        let mut next = false;
+         self.lines.iter().for_each(|line| {
+            line.blocks.iter().filter_map(|opt_line_block| {
+                match opt_line_block {
+                    Some(line_block) => Some(line_block),
+                    None => None,
+                }
+            }).try_for_each(|line_block| {
+                self.active_piece.blocks().iter().try_for_each(|active_block| {
+                    if active_block.y_pos_bottom() > (line.row * 30) as f32
+                        && line_block.col == active_block.col {
+                        next = true;
+                        return ControlFlow::Break(())
+                    }
+                    ControlFlow::Continue(())
+                })
+            });
+        });
+
+        if !next {
+            self.active_piece.blocks().iter().try_for_each(|active_block| {
+                if active_block.y_pos_bottom() > 450 as f32 {
+                    next = true;
+                    return ControlFlow::Break(())
+                }
+                ControlFlow::Continue(())
+            });
+        }
+
+        if next {
+            self.next_piece();
+        }
 
         Ok(())
     }
@@ -44,7 +78,7 @@ impl State for GameState {
             self.block_texture.draw(
                 ctx,
                 DrawParams::new()
-                    .position(block.position)
+                    .position(Vec2::new((block.col * 30) as f32, block.y_pos_top))
                     .color(block.color)
                     .scale(Vec2::new(30 as f32 / 16 as f32, 30 as f32 / 16 as f32))
             )
@@ -52,15 +86,22 @@ impl State for GameState {
         // println!("{}", self.block_texture.width());
 
         self.lines.iter().for_each(|line| {
-            line.blocks.iter().for_each(|block| {
+            line.blocks.iter().filter_map(|opt_block| {
+                match opt_block {
+                    Some(block) => Some(block),
+                    None => None,
+                }
+            }).for_each(|block| {
                 self.block_texture.draw(
                     ctx,
                     DrawParams::new()
-                        .position(block.position)
-                        .color(block.color),
+                        .position(Vec2::new((block.col * 30) as f32, block.y_pos_top))
+                        .color(block.color)
+                        .scale(Vec2::new(30 as f32 / 16 as f32, 30 as f32 / 16 as f32))
                 )
             })
         });
+
         graphics::reset_canvas(ctx);
         graphics::clear(ctx, Color::BLACK);
         self.scaler.draw(ctx);
@@ -80,7 +121,7 @@ impl State for GameState {
 struct GameState {
     block_texture: Texture,
     scaler: ScreenScaler,
-    lines: Vec<Line>,
+    lines: [Line; 15],
     active_piece: Box<dyn Piece>,
     velocity: f32,
 }
@@ -100,27 +141,77 @@ impl GameState {
                 blocks: vec![
                     Block {
                         color: Color::rgba8(245, 40, 145, 204),
-                        position: Point2::new(120f32, 0f32),
+                        col: 4,
+                        y_pos_top: 0 as f32,
                     },
                     Block {
                         color: Color::rgba8(245, 40, 145, 204),
-                        position: Point2::new(150f32, 0f32),
+                        col: 5,
+                        y_pos_top: 0 as f32,
                     },
                     Block {
                         color: Color::rgba8(245, 40, 145, 204),
-                        position: Point2::new(120f32, 30f32),
+                        col: 4,
+                        y_pos_top: 30 as f32,
                     },
                     Block {
                         color: Color::rgba8(245, 40, 145, 204),
-                        position: Point2::new(150f32, 30f32),
+                        col: 5,
+                        y_pos_top: 30 as f32,
                     },
                 ],
                 rotation: Rotation::R0,
             }),
-            lines: vec![],
+            lines: generate_lines(),
             velocity: 1 as f32,
         })
     }
+
+
+    fn next_piece(&mut self) {
+        self.active_piece.blocks_mut().iter().for_each(|block| {
+
+            let line_num = block.y_pos_top as i32 / 30;
+
+            self.lines[line_num as usize].blocks[block.col as usize] = Some(*block);
+        });
+
+        self.active_piece = Box::new(Square {
+            blocks: vec![
+                Block {
+                    color: Color::rgba8(245, 40, 145, 204),
+                    col: 4,
+                    y_pos_top: 0 as f32,
+                },
+                Block {
+                    color: Color::rgba8(245, 40, 145, 204),
+                    col: 5,
+                    y_pos_top: 0 as f32,
+                },
+                Block {
+                    color: Color::rgba8(245, 40, 145, 204),
+                    col: 4,
+                    y_pos_top: 30 as f32,
+                },
+                Block {
+                    color: Color::rgba8(245, 40, 145, 204),
+                    col: 5,
+                    y_pos_top: 30 as f32,
+                },
+            ],
+            rotation: Rotation::R0,
+        });
+    }
+}
+
+fn generate_lines() -> [Line; 15] {
+    let mut lines = [ Line{ row: 0, blocks: [None; 10] }; 15];
+
+    for i in 0..lines.len() {
+        lines[i].row = i as u32;
+    }
+
+    lines
 }
 
 struct Square {
@@ -129,22 +220,34 @@ struct Square {
 }
 
 impl Piece for Square {
-    fn blocks(&mut self) -> &mut Vec<Block> {
-        &mut self.blocks
+    fn blocks(&self) -> &Vec<Block> {
+        &self.blocks
     }
+    fn blocks_mut(&mut self) -> &mut Vec<Block> { &mut self.blocks }
 }
 
 trait Piece {
-    fn blocks(&mut self) -> &mut Vec<Block>;
+    fn blocks(&self) -> &Vec<Block>;
+    fn blocks_mut(&mut self) -> &mut Vec<Block>;
 }
 
+#[derive(Clone, Copy)]
 struct Block {
     color: Color,
-    position: Point2,
+    col: u32,
+    y_pos_top: f32,
 }
 
+impl Block {
+    fn y_pos_bottom(&self) -> f32 {
+        self.y_pos_top + 30 as f32
+    }
+}
+
+#[derive(Clone, Copy)]
 struct Line {
-    blocks: [Block; 10],
+    row: u32,
+    blocks: [Option<Block>; 10],
 }
 
 // impl Entity {
