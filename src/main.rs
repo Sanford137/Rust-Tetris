@@ -1,4 +1,7 @@
+extern crate core;
+
 use std::ops::ControlFlow;
+use rand::Rng;
 // use rand::prelude::*;
 use tetra::graphics::scaling::{ScalingMode, ScreenScaler};
 use tetra::graphics::{self, Color, DrawParams, Texture};
@@ -11,13 +14,12 @@ use tetra::{Context, ContextBuilder, Event, State};
 const WINDOW_WIDTH: i32 = 300;
 const WINDOW_HEIGHT: i32 = 450;
 
-type Point2 = Vec2<f32>;
-
-enum Rotation {
-    R0,
-    R90,
-    R180,
-    R270,
+fn main() -> tetra::Result {
+    ContextBuilder::new("Tetris", WINDOW_WIDTH as i32, WINDOW_HEIGHT as i32)
+        .quit_on_escape(true)
+        .resizable(true)
+        .build()?
+        .run(GameState::new)
 }
 
 struct GameState {
@@ -116,7 +118,8 @@ impl State for GameState {
             },
             Event::KeyPressed{ key: key @ (Key::Right | Key::Left)}  => {
                 self.move_piece(key);
-            },
+            }
+            Event::KeyPressed{ key: Key::Space} => self.active_piece.rotate(),
             _ => ()
         }
 
@@ -135,31 +138,7 @@ impl GameState {
                 ScalingMode::ShowAllPixelPerfect,
             )?,
 
-            active_piece: Box::new(Square {
-                blocks: vec![
-                    Block {
-                        color: Color::rgba8(245, 40, 145, 204),
-                        col: 4,
-                        y_pos_top: 0 as f32,
-                    },
-                    Block {
-                        color: Color::rgba8(245, 40, 145, 204),
-                        col: 5,
-                        y_pos_top: 0 as f32,
-                    },
-                    Block {
-                        color: Color::rgba8(245, 40, 145, 204),
-                        col: 4,
-                        y_pos_top: 30 as f32,
-                    },
-                    Block {
-                        color: Color::rgba8(245, 40, 145, 204),
-                        col: 5,
-                        y_pos_top: 30 as f32,
-                    },
-                ],
-                rotation: Rotation::R0,
-            }),
+            active_piece: Box::new(Square::new()),
             lines: generate_lines(),
             velocity: 1 as f32,
         })
@@ -176,44 +155,25 @@ impl GameState {
             self.lines[line_num as usize].blocks[block.col as usize] = Some(*block);
         });
 
-        self.active_piece = Box::new(Square {
-            blocks: vec![
-                Block {
-                    color: Color::rgba8(245, 40, 145, 204),
-                    col: 4,
-                    y_pos_top: 0 as f32,
-                },
-                Block {
-                    color: Color::rgba8(245, 40, 145, 204),
-                    col: 5,
-                    y_pos_top: 0 as f32,
-                },
-                Block {
-                    color: Color::rgba8(245, 40, 145, 204),
-                    col: 4,
-                    y_pos_top: 30 as f32,
-                },
-                Block {
-                    color: Color::rgba8(245, 40, 145, 204),
-                    col: 5,
-                    y_pos_top: 30 as f32,
-                },
-            ],
-            rotation: Rotation::R0,
-        });
+        let n = rand::thread_rng().gen_range(0..2);
+        self.active_piece = match n {
+            0 => Box::new(Square::new()),
+            1 => Box::new(Straight::new()),
+            _ => panic!("unexpected number encountered"),
+        };
     }
 
     fn move_piece(&mut self, key: Key) {
-        let mut atBoundary = false;
+        let mut at_boundary = false;
         self.active_piece.blocks().iter().try_for_each(|block| {
             if block.col == 0 && key == Key::Left  || block.col == 9 && key == Key::Right {
-                atBoundary = true;
+                at_boundary = true;
                 return ControlFlow::Break(())
             }
             ControlFlow::Continue(())
         });
 
-        if atBoundary {
+        if at_boundary {
             return
         }
 
@@ -237,23 +197,6 @@ fn generate_lines() -> [Line; 15] {
     lines
 }
 
-struct Square {
-    blocks: Vec<Block>,
-    rotation: Rotation,
-}
-
-impl Piece for Square {
-    fn blocks(&self) -> &Vec<Block> {
-        &self.blocks
-    }
-    fn blocks_mut(&mut self) -> &mut Vec<Block> { &mut self.blocks }
-}
-
-trait Piece {
-    fn blocks(&self) -> &Vec<Block>;
-    fn blocks_mut(&mut self) -> &mut Vec<Block>;
-}
-
 #[derive(Clone, Copy)]
 struct Block {
     color: Color,
@@ -273,14 +216,111 @@ struct Line {
     blocks: [Option<Block>; 10],
 }
 
-
-fn main() -> tetra::Result {
-    ContextBuilder::new("Tetris", WINDOW_WIDTH as i32, WINDOW_HEIGHT as i32)
-        .quit_on_escape(true)
-        .resizable(true)
-        .build()?
-        .run(GameState::new)
+trait Piece {
+    fn blocks(&self) -> &Vec<Block>;
+    fn blocks_mut(&mut self) -> &mut Vec<Block>;
+    fn rotate(&mut self);
 }
+
+enum Rotation {
+    R0,
+    R90,
+    R180,
+    R270,
+}
+
+struct Square {
+    blocks: Vec<Block>,
+    rotation: Rotation,
+}
+
+impl Piece for Square {
+    fn blocks(&self) -> &Vec<Block> {
+        &self.blocks
+    }
+    fn blocks_mut(&mut self) -> &mut Vec<Block> { &mut self.blocks }
+    fn rotate(&mut self) {}
+}
+
+impl Square {
+    fn new() -> Square {
+        Square {
+            blocks: vec![
+                Block {
+                    color: Color::rgba8(245, 40, 145, 204),
+                    col: 4,
+                    y_pos_top: -60 as f32,
+                },
+                Block {
+                    color: Color::rgba8(245, 40, 145, 204),
+                    col: 5,
+                    y_pos_top: -60 as f32,
+                },
+                Block {
+                    color: Color::rgba8(245, 40, 145, 204),
+                    col: 4,
+                    y_pos_top: -30 as f32,
+                },
+                Block {
+                    color: Color::rgba8(245, 40, 145, 204),
+                    col: 5,
+                    y_pos_top: -30 as f32,
+                },
+            ],
+            rotation: Rotation::R0,
+        }
+    }
+}
+
+struct Straight {
+    blocks: Vec<Block>,
+    rotation: Rotation,
+}
+
+impl Piece for Straight {
+    fn blocks(&self) -> &Vec<Block> {
+        &self.blocks
+    }
+    fn blocks_mut(&mut self) -> &mut Vec<Block> { &mut self.blocks }
+    fn rotate(&mut self) {
+
+    }
+}
+
+impl Straight {
+    fn new() -> Straight {
+        Straight {
+            blocks: vec![
+                Block {
+                    color: Color::rgba8(245, 40, 145, 204),
+                    col: 4,
+                    y_pos_top: -120 as f32,
+                },
+                Block {
+                    color: Color::rgba8(245, 40, 145, 204),
+                    col: 4,
+                    y_pos_top: -90 as f32,
+                },
+                Block {
+                    color: Color::rgba8(245, 40, 145, 204),
+                    col: 4,
+                    y_pos_top: -60 as f32,
+                },
+                Block {
+                    color: Color::rgba8(245, 40, 145, 204),
+                    col: 4,
+                    y_pos_top: -30 as f32,
+                },
+            ],
+            rotation: Rotation::R0,
+        }
+    }
+}
+
+
+
+
+
 
 // impl Entity {
 //     fn width(&self) -> f32 {
