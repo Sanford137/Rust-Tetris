@@ -125,7 +125,7 @@ impl State for GameState {
             Event::Resized{ width, height } => {
                 self.scaler.set_outer_size(width, height);
             },
-            Event::KeyPressed { key: Key::RightShift | Key::LeftShift} => self.toggle_pause(),
+            Event::KeyPressed { key: Key::RightShift | Key::LeftShift } => self.toggle_pause(),
             _ => (),
         }
 
@@ -134,10 +134,11 @@ impl State for GameState {
         }
 
         match event {
-            Event::KeyPressed{ key: key @ (Key::Right | Key::Left)}  => {
+            Event::KeyPressed{ key: key @ (Key::Right | Key::Left) }  => {
                 self.move_piece(key);
             }
-            Event::KeyPressed{ key: Key::Space} => self.active_piece.rotate(),
+            Event::KeyPressed{ key: Key::Space } => self.active_piece.rotate(),
+            Event::KeyPressed { key: Key::Down } => self.drop_piece(),
             _ => (),
         }
 
@@ -163,7 +164,6 @@ impl GameState {
         })
     }
 
-
     fn next_piece(&mut self) {
         self.active_piece.blocks_mut().iter_mut().for_each(|block| {
 
@@ -185,6 +185,8 @@ impl GameState {
             6 => Box::new(LeftSkew::new()),
             _ => panic!("unexpected number encountered"),
         };
+
+        self.velocity = 1 as f32;
     }
 
     fn move_piece(&mut self, key: Key) {
@@ -215,6 +217,10 @@ impl GameState {
             PlayMode::Paused => self.play_mode = PlayMode::Running,
             PlayMode::Running => self.play_mode = PlayMode::Paused,
         }
+    }
+
+    fn drop_piece(&mut self) {
+        self.velocity = f32::max(self.velocity * 3 as f32, 10 as f32)
     }
 }
 
