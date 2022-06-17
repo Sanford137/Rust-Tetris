@@ -174,7 +174,22 @@ impl GameState {
             self.lines[line_num as usize].blocks[block.col as usize] = Some(*block);
         });
 
-        let n = rand::thread_rng().gen_range(0..6);
+        for line in self.lines.iter_mut() {
+            let mut full = true;
+            for block in line.blocks {
+                if let None = block {
+                    full = false;
+                    break
+                }
+            }
+            if !full {
+                continue
+            }
+
+            line.blocks = [None; 10];
+        }
+
+        let n = rand::thread_rng().gen_range(0..7);
         self.active_piece = match n {
             0 => Box::new(Square::new()),
             1 => Box::new(Straight::new()),
