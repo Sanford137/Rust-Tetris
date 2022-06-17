@@ -13,6 +13,12 @@ use tetra::{Context, ContextBuilder, Event, State};
 const WINDOW_WIDTH: i32 = 300;
 const WINDOW_HEIGHT: i32 = 450;
 
+#[derive(PartialEq)]
+enum PlayMode {
+    Running,
+    Paused,
+}
+
 fn main() -> tetra::Result {
     ContextBuilder::new("Tetris", WINDOW_WIDTH as i32, WINDOW_HEIGHT as i32)
         .quit_on_escape(true)
@@ -27,10 +33,15 @@ struct GameState {
     lines: [Line; 15],
     active_piece: Box<dyn Piece>,
     velocity: f32,
+    play_mode: PlayMode,
 }
 
 impl State for GameState {
     fn update(&mut self, ctx: &mut Context) -> tetra::Result {
+        if self.play_mode == PlayMode::Paused {
+            return Ok(());
+        }
+
         self.active_piece.blocks_mut().iter_mut().for_each(|block| {
             block.y_pos_top += self.velocity
         });
@@ -114,11 +125,20 @@ impl State for GameState {
             Event::Resized{ width, height } => {
                 self.scaler.set_outer_size(width, height);
             },
+            Event::KeyPressed { key: Key::RightShift | Key::LeftShift} => self.toggle_pause(),
+            _ => (),
+        }
+
+        if self.play_mode == PlayMode::Paused {
+            return Ok(())
+        }
+
+        match event {
             Event::KeyPressed{ key: key @ (Key::Right | Key::Left)}  => {
                 self.move_piece(key);
             }
             Event::KeyPressed{ key: Key::Space} => self.active_piece.rotate(),
-            _ => ()
+            _ => (),
         }
 
         Ok(())
@@ -136,9 +156,10 @@ impl GameState {
                 ScalingMode::ShowAllPixelPerfect,
             )?,
 
-            active_piece: Box::new(Straight::new()),
+            active_piece: Box::new(Square::new()),
             lines: generate_lines(),
             velocity: 1 as f32,
+            play_mode: PlayMode::Running,
         })
     }
 
@@ -153,10 +174,15 @@ impl GameState {
             self.lines[line_num as usize].blocks[block.col as usize] = Some(*block);
         });
 
-        let n = rand::thread_rng().gen_range(0..2);
+        let n = rand::thread_rng().gen_range(0..6);
         self.active_piece = match n {
             0 => Box::new(Square::new()),
             1 => Box::new(Straight::new()),
+            2 => Box::new(T::new()),
+            3 => Box::new(RightL::new()),
+            4 => Box::new(LeftL::new()),
+            5 => Box::new(RightSkew::new()),
+            6 => Box::new(LeftSkew::new()),
             _ => panic!("unexpected number encountered"),
         };
     }
@@ -182,6 +208,13 @@ impl GameState {
                 _ => panic!("unexpected key type encountered: {:?} ", key),
             }
         });
+    }
+
+    fn toggle_pause(&mut self) {
+        match self.play_mode {
+            PlayMode::Paused => self.play_mode = PlayMode::Running,
+            PlayMode::Running => self.play_mode = PlayMode::Paused,
+        }
     }
 }
 
@@ -252,28 +285,28 @@ impl Piece for Square {
 }
 
 impl Square {
-    fn new() -> Square {
-        Square {
+    fn new() -> Self {
+        Self {
             blocks: vec![
                 Block {
                     color: Color::rgba8(245, 40, 145, 204),
                     col: 4,
-                    y_pos_top: -60 as f32,
+                    y_pos_top: -30 as f32,
                 },
                 Block {
                     color: Color::rgba8(245, 40, 145, 204),
                     col: 5,
-                    y_pos_top: -60 as f32,
+                    y_pos_top: -30 as f32,
                 },
                 Block {
                     color: Color::rgba8(245, 40, 145, 204),
                     col: 4,
-                    y_pos_top: -30 as f32,
+                    y_pos_top: -60 as f32,
                 },
                 Block {
                     color: Color::rgba8(245, 40, 145, 204),
                     col: 5,
-                    y_pos_top: -30 as f32,
+                    y_pos_top: -60 as f32,
                 },
             ],
         }
@@ -282,7 +315,7 @@ impl Square {
 
 struct Straight {
     blocks: Vec<Block>,
-    rotation: i32,
+    rotation: u32,
 }
 
 impl Piece for Straight {
@@ -319,7 +352,7 @@ impl Piece for Straight {
                 self.blocks_mut()[2].col += -1;
                 self.blocks_mut()[2].y_pos_top += -30 as f32;
 
-                self.blocks_mut()[3].col -= 2;
+                self.blocks_mut()[3].col += -2;
                 self.blocks_mut()[3].y_pos_top += -60 as f32;
             },
             270 => {
@@ -340,8 +373,8 @@ impl Piece for Straight {
 }
 
 impl Straight {
-    fn new() -> Straight {
-        Straight {
+    fn new() -> Self {
+        Self {
             blocks: vec![
                 Block {
                     color: Color::rgba8(43, 215, 54, 204),
@@ -368,6 +401,413 @@ impl Straight {
         }
     }
 }
+
+struct T {
+    blocks: Vec<Block>,
+    rotation: u32,
+}
+
+impl Piece for T {
+    fn blocks(&self) -> &Vec<Block> {
+        &self.blocks
+    }
+    fn blocks_mut(&mut self) -> &mut Vec<Block> { &mut self.blocks }
+    fn rotate(&mut self) {
+        match self.rotation {
+            0 => {
+                self.blocks_mut()[0].col += 1;
+                self.blocks_mut()[0].y_pos_top += -30 as f32;
+
+                self.blocks_mut()[2].col += -1;
+                self.blocks_mut()[2].y_pos_top += 30 as f32;
+
+                self.blocks_mut()[3].col += 1;
+                self.blocks_mut()[3].y_pos_top += 30 as f32;
+            },
+            90 => {
+                self.blocks_mut()[0].col += 1;
+                self.blocks_mut()[0].y_pos_top += 30 as f32;
+
+                self.blocks_mut()[2].col += -1;
+                self.blocks_mut()[2].y_pos_top += -30 as f32;
+
+                self.blocks_mut()[3].col += -1;
+                self.blocks_mut()[3].y_pos_top += 30 as f32;
+            },
+            180 => {
+                self.blocks_mut()[0].col += -1;
+                self.blocks_mut()[0].y_pos_top += 30 as f32;
+
+                self.blocks_mut()[2].col += 1;
+                self.blocks_mut()[2].y_pos_top += -30 as f32;
+
+                self.blocks_mut()[3].col += -1;
+                self.blocks_mut()[3].y_pos_top += -30 as f32;
+            },
+            270 => {
+                self.blocks_mut()[0].col += -1;
+                self.blocks_mut()[0].y_pos_top += -30 as f32;
+
+                self.blocks_mut()[2].col += 1;
+                self.blocks_mut()[2].y_pos_top += 30 as f32;
+
+                self.blocks_mut()[3].col += 1;
+                self.blocks_mut()[3].y_pos_top += -30 as f32;
+            },
+            _ => panic!("received unexpected rotation value: {}", self.rotation),
+        }
+        self.enforce_boundaries_after_rotation();
+        self.rotation = (self.rotation + 90).rem_euclid(360);
+    }
+}
+
+impl T {
+    fn new() -> Self {
+        Self {
+            blocks: vec![
+                Block {
+                    color: Color::rgba8(43, 215, 54, 204),
+                    col: 3,
+                    y_pos_top: -30 as f32,
+                },
+                Block {
+                    color: Color::rgba8(245, 40, 145, 204),
+                    col: 4,
+                    y_pos_top: -30 as f32,
+                },
+                Block {
+                    color: Color::rgba8(8, 210, 234, 204),
+                    col: 5,
+                    y_pos_top: -30 as f32,
+                },
+                Block {
+                    color: Color::rgba8(222, 18, 55, 204),
+                    col: 4,
+                    y_pos_top: -60 as f32,
+                },
+            ],
+            rotation: 0,
+        }
+    }
+}
+
+struct RightL {
+    blocks: Vec<Block>,
+    rotation: u32,
+}
+
+impl Piece for RightL {
+    fn blocks(&self) -> &Vec<Block> {
+        &self.blocks
+    }
+    fn blocks_mut(&mut self) -> &mut Vec<Block> { &mut self.blocks }
+    fn rotate(&mut self) {
+        match self.rotation {
+            0 => {
+                self.blocks_mut()[1].col += -1;
+                self.blocks_mut()[1].y_pos_top += 30 as f32;
+
+                self.blocks_mut()[2].col += 1;
+                self.blocks_mut()[2].y_pos_top += 30 as f32;
+
+                self.blocks_mut()[3].col += 2;
+                self.blocks_mut()[3].y_pos_top += 60 as f32;
+            },
+            90 => {
+                self.blocks_mut()[1].col += -1;
+                self.blocks_mut()[1].y_pos_top += -30 as f32;
+
+                self.blocks_mut()[2].col += -1;
+                self.blocks_mut()[2].y_pos_top += 30 as f32;
+
+                self.blocks_mut()[3].col += -2;
+                self.blocks_mut()[3].y_pos_top += 60 as f32;
+            },
+            180 => {
+                self.blocks_mut()[1].col += 1;
+                self.blocks_mut()[1].y_pos_top += -30 as f32;
+
+                self.blocks_mut()[2].col += -1;
+                self.blocks_mut()[2].y_pos_top += -30 as f32;
+
+                self.blocks_mut()[3].col += -2;
+                self.blocks_mut()[3].y_pos_top += -60 as f32;
+            },
+            270 => {
+                self.blocks_mut()[1].col += 1;
+                self.blocks_mut()[1].y_pos_top += 30 as f32;
+
+                self.blocks_mut()[2].col += 1;
+                self.blocks_mut()[2].y_pos_top += -30 as f32;
+
+                self.blocks_mut()[3].col += 2;
+                self.blocks_mut()[3].y_pos_top += -60 as f32;
+            },
+            _ => panic!("received unexpected rotation value: {}", self.rotation),
+        }
+        self.enforce_boundaries_after_rotation();
+        self.rotation = (self.rotation + 90).rem_euclid(360);
+    }
+}
+
+impl RightL {
+    fn new() -> Self {
+        Self {
+            blocks: vec![
+                Block {
+                    color: Color::rgba8(43, 215, 54, 204),
+                    col: 4,
+                    y_pos_top: -30 as f32,
+                },
+                Block {
+                    color: Color::rgba8(245, 40, 145, 204),
+                    col: 5,
+                    y_pos_top: -30 as f32,
+                },
+                Block {
+                    color: Color::rgba8(8, 210, 234, 204),
+                    col: 4,
+                    y_pos_top: -60 as f32,
+                },
+                Block {
+                    color: Color::rgba8(222, 18, 55, 204),
+                    col: 4,
+                    y_pos_top: -90 as f32,
+                },
+            ],
+            rotation: 0,
+        }
+    }
+}
+
+struct LeftL {
+    blocks: Vec<Block>,
+    rotation: u32,
+}
+
+impl Piece for LeftL {
+    fn blocks(&self) -> &Vec<Block> {
+        &self.blocks
+    }
+    fn blocks_mut(&mut self) -> &mut Vec<Block> { &mut self.blocks }
+    fn rotate(&mut self) {
+        match self.rotation {
+            0 => {
+                self.blocks_mut()[0].col += 1;
+                self.blocks_mut()[0].y_pos_top += -30 as f32;
+
+                self.blocks_mut()[2].col += 1;
+                self.blocks_mut()[2].y_pos_top += 30 as f32;
+
+                self.blocks_mut()[3].col += 2;
+                self.blocks_mut()[3].y_pos_top += 60 as f32;
+            },
+            90 => {
+                self.blocks_mut()[0].col += 1;
+                self.blocks_mut()[0].y_pos_top += 30 as f32;
+
+                self.blocks_mut()[2].col += -1;
+                self.blocks_mut()[2].y_pos_top += 30 as f32;
+
+                self.blocks_mut()[3].col += -2;
+                self.blocks_mut()[3].y_pos_top += 60 as f32;
+            },
+            180 => {
+                self.blocks_mut()[0].col += -1;
+                self.blocks_mut()[0].y_pos_top += 30 as f32;
+
+                self.blocks_mut()[2].col += -1;
+                self.blocks_mut()[2].y_pos_top += -30 as f32;
+
+                self.blocks_mut()[3].col += -2;
+                self.blocks_mut()[3].y_pos_top += -60 as f32;
+            },
+            270 => {
+                self.blocks_mut()[0].col += -1;
+                self.blocks_mut()[0].y_pos_top += -30 as f32;
+
+                self.blocks_mut()[2].col += 1;
+                self.blocks_mut()[2].y_pos_top += -30 as f32;
+
+                self.blocks_mut()[3].col += 2;
+                self.blocks_mut()[3].y_pos_top += -60 as f32;
+            },
+            _ => panic!("received unexpected rotation value: {}", self.rotation),
+        }
+        self.enforce_boundaries_after_rotation();
+        self.rotation = (self.rotation + 90).rem_euclid(360);
+    }
+}
+
+impl LeftL {
+    fn new() -> Self {
+        Self {
+            blocks: vec![
+                Block {
+                    color: Color::rgba8(43, 215, 54, 204),
+                    col: 4,
+                    y_pos_top: -30 as f32,
+                },
+                Block {
+                    color: Color::rgba8(245, 40, 145, 204),
+                    col: 5,
+                    y_pos_top: -30 as f32,
+                },
+                Block {
+                    color: Color::rgba8(8, 210, 234, 204),
+                    col: 5,
+                    y_pos_top: -60 as f32,
+                },
+                Block {
+                    color: Color::rgba8(222, 18, 55, 204),
+                    col: 5,
+                    y_pos_top: -90 as f32,
+                },
+            ],
+            rotation: 0,
+        }
+    }
+}
+
+struct RightSkew {
+    blocks: Vec<Block>,
+    rotation: u32,
+}
+
+impl Piece for RightSkew {
+    fn blocks(&self) -> &Vec<Block> {
+        &self.blocks
+    }
+    fn blocks_mut(&mut self) -> &mut Vec<Block> { &mut self.blocks }
+    fn rotate(&mut self) {
+        match self.rotation {
+            0 => {
+                self.blocks_mut()[0].col += 1;
+                self.blocks_mut()[0].y_pos_top += -30 as f32;
+
+                self.blocks_mut()[2].col += 1;
+                self.blocks_mut()[2].y_pos_top += 30 as f32;
+
+                self.blocks_mut()[3].col += 0;
+                self.blocks_mut()[3].y_pos_top += 60 as f32;
+            },
+            90 => {
+                self.blocks_mut()[0].col += -1;
+                self.blocks_mut()[0].y_pos_top += 30 as f32;
+
+                self.blocks_mut()[2].col += -1;
+                self.blocks_mut()[2].y_pos_top += -30 as f32;
+
+                self.blocks_mut()[3].col += 0;
+                self.blocks_mut()[3].y_pos_top += -60 as f32;
+            },
+            _ => panic!("received unexpected rotation value: {}", self.rotation),
+        }
+        self.enforce_boundaries_after_rotation();
+        self.rotation = (self.rotation + 90).rem_euclid(180);
+    }
+}
+
+impl RightSkew {
+    fn new() -> Self {
+        Self {
+            blocks: vec![
+                Block {
+                    color: Color::rgba8(43, 215, 54, 204),
+                    col: 3,
+                    y_pos_top: -30 as f32,
+                },
+                Block {
+                    color: Color::rgba8(245, 40, 145, 204),
+                    col: 4,
+                    y_pos_top: -30 as f32,
+                },
+                Block {
+                    color: Color::rgba8(8, 210, 234, 204),
+                    col: 4,
+                    y_pos_top: -60 as f32,
+                },
+                Block {
+                    color: Color::rgba8(222, 18, 55, 204),
+                    col: 5,
+                    y_pos_top: -60 as f32,
+                },
+            ],
+            rotation: 0,
+        }
+    }
+}
+
+struct LeftSkew {
+    blocks: Vec<Block>,
+    rotation: u32,
+}
+
+impl Piece for LeftSkew {
+    fn blocks(&self) -> &Vec<Block> {
+        &self.blocks
+    }
+    fn blocks_mut(&mut self) -> &mut Vec<Block> { &mut self.blocks }
+    fn rotate(&mut self) {
+        match self.rotation {
+            0 => {
+                self.blocks_mut()[1].col += -1;
+                self.blocks_mut()[1].y_pos_top += 30 as f32;
+
+                self.blocks_mut()[2].col += 2;
+                self.blocks_mut()[2].y_pos_top += 0 as f32;
+
+                self.blocks_mut()[3].col += 1;
+                self.blocks_mut()[3].y_pos_top += 30 as f32;
+            },
+            90 => {
+                self.blocks_mut()[1].col += 1;
+                self.blocks_mut()[1].y_pos_top += -30 as f32;
+
+                self.blocks_mut()[2].col += -2;
+                self.blocks_mut()[2].y_pos_top += 0 as f32;
+
+                self.blocks_mut()[3].col += -1;
+                self.blocks_mut()[3].y_pos_top += -30 as f32;
+            },
+            _ => panic!("received unexpected rotation value: {}", self.rotation),
+        }
+        self.enforce_boundaries_after_rotation();
+        self.rotation = (self.rotation + 90).rem_euclid(180);
+    }
+}
+
+impl LeftSkew {
+    fn new() -> Self {
+        Self {
+            blocks: vec![
+                Block {
+                    color: Color::rgba8(43, 215, 54, 204),
+                    col: 4,
+                    y_pos_top: -30 as f32,
+                },
+                Block {
+                    color: Color::rgba8(245, 40, 145, 204),
+                    col: 5,
+                    y_pos_top: -30 as f32,
+                },
+                Block {
+                    color: Color::rgba8(8, 210, 234, 204),
+                    col: 3,
+                    y_pos_top: -60 as f32,
+                },
+                Block {
+                    color: Color::rgba8(222, 18, 55, 204),
+                    col: 4,
+                    y_pos_top: -60 as f32,
+                },
+            ],
+            rotation: 0,
+        }
+    }
+}
+
+
 
 
 
