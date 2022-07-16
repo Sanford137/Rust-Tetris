@@ -47,7 +47,7 @@ impl State for GameState {
         });
 
         let mut next = false;
-         self.lines.iter().for_each(|line| {
+        self.lines.iter().for_each(|line| {
             line.blocks.iter().filter_map(|opt_line_block| {
                 match opt_line_block {
                     Some(line_block) => Some(line_block),
@@ -174,7 +174,8 @@ impl GameState {
             self.lines[line_num as usize].blocks[block.col as usize] = Some(*block);
         });
 
-        for line in self.lines.iter_mut() {
+        let mut deleted_rows = vec![];
+        for (row, line) in self.lines.iter().enumerate() {
             let mut full = true;
             for block in line.blocks {
                 if let None = block {
@@ -182,11 +183,12 @@ impl GameState {
                     break
                 }
             }
-            if !full {
-                continue
+            if full {
+                deleted_rows.push(row);
             }
-
-            line.blocks = [None; 10];
+        }
+        for row in deleted_rows {
+            drop_line(&mut self.lines, row as usize)
         }
 
         let n = rand::thread_rng().gen_range(0..7);
@@ -248,6 +250,26 @@ fn generate_lines() -> [Line; 15] {
 
     lines
 }
+
+fn drop_line(lines: &mut [Line; 15], deleted_row: usize) {
+    let max_row = lines.len() - 1;
+    for row in (1..=max_row).rev()  {
+        if row <= deleted_row  {
+            lines[row] = lines[row - 1];
+            lines[row].row = row as u32;
+            for block in lines[row].blocks.iter_mut().filter_map(|opt_block| {
+                match opt_block {
+                    Some(block) => Some(block),
+                    None => None,
+                }
+            }) {
+                block.y_pos_top += 30 as f32;
+            }
+        }
+    }
+    lines[0] = Line{ row: 0, blocks: [None; 10] };
+}
+
 
 #[derive(Clone, Copy)]
 struct Block {
