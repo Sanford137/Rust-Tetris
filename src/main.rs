@@ -208,8 +208,35 @@ impl GameState {
             }
             ControlFlow::Continue(())
         });
-
         if at_boundary {
+            return
+        }
+
+        let mut blocked = false;
+        self.active_piece.blocks().iter().try_for_each(|block| {
+            let cur_row = block.y_pos_top as usize / 30;
+            let next_row = cmp::min(cur_row + 1, self.lines.len() - 1);
+            if key == Key::Left {
+                if let Some(_) = self.lines[cur_row].blocks[block.col as usize - 1] {
+                    blocked = true;
+                }
+                if let Some(_) = self.lines[next_row].blocks[block.col as usize - 1] {
+                    blocked = true;
+                }
+                return ControlFlow::Break(())
+            }
+            if key == Key::Right {
+                if let Some(_) = self.lines[cur_row].blocks[block.col as usize + 1] {
+                    blocked = true;
+                }
+                if let Some(_) = self.lines[next_row].blocks[block.col as usize + 1] {
+                    blocked = true;
+                }
+                return ControlFlow::Break(())
+            }
+            ControlFlow::Continue(())
+        });
+        if blocked {
             return
         }
 
