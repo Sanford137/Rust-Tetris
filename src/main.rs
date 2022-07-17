@@ -10,6 +10,9 @@ use tetra::math::Vec2;
 use tetra::{Context, ContextBuilder, Event, State};
 // use image::GenericImageView;
 
+mod filter_none;
+use filter_none::{filter_none, filter_none_mut};
+
 const WINDOW_WIDTH: i32 = 300;
 const WINDOW_HEIGHT: i32 = 450;
 
@@ -48,12 +51,7 @@ impl State for GameState {
 
         let mut next = false;
         self.lines.iter().for_each(|line| {
-            line.blocks.iter().filter_map(|opt_line_block| {
-                match opt_line_block {
-                    Some(line_block) => Some(line_block),
-                    None => None,
-                }
-            }).try_for_each(|line_block| {
+            filter_none(line.blocks.iter()).try_for_each(|line_block| {
                 self.active_piece.blocks().iter().try_for_each(|active_block| {
                     if active_block.y_pos_bottom() > (line.row * 30) as f32
                         && line_block.col == active_block.col {
@@ -97,12 +95,7 @@ impl State for GameState {
         };
 
         self.lines.iter().for_each(|line| {
-            line.blocks.iter().filter_map(|opt_block| {
-                match opt_block {
-                    Some(block) => Some(block),
-                    None => None,
-                }
-            }).for_each(|block| {
+            filter_none(line.blocks.iter()).for_each(|block| {
                 self.block_texture.draw(
                     ctx,
                     DrawParams::new()
@@ -257,12 +250,7 @@ fn drop_line(lines: &mut [Line; 15], deleted_row: usize) {
         if row <= deleted_row  {
             lines[row] = lines[row - 1];
             lines[row].row = row as u32;
-            for block in lines[row].blocks.iter_mut().filter_map(|opt_block| {
-                match opt_block {
-                    Some(block) => Some(block),
-                    None => None,
-                }
-            }) {
+            for block in filter_none_mut(lines[row].blocks.iter_mut()) {
                 block.y_pos_top += 30 as f32;
             }
         }
