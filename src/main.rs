@@ -82,7 +82,7 @@ impl State for GameState {
 
     fn draw(&mut self, ctx: &mut Context) -> tetra::Result {
         graphics::set_canvas(ctx, self.scaler.canvas());
-        graphics::clear(ctx, Color::rgba8(102, 101, 112, 222));
+        graphics::clear(ctx, Color::rgba8(255, 255, 255, 225));
 
         for block in self.active_piece.blocks() {
             self.block_texture.draw(
@@ -408,22 +408,22 @@ impl Straight {
         Self {
             blocks: vec![
                 Block {
-                    color: Color::rgba8(43, 215, 54, 204),
+                    color: Color::rgba8(61, 139, 232, 117),
                     col: 4,
                     y_pos_top: -30 as f32,
                 },
                 Block {
-                    color: Color::rgba8(245, 40, 145, 204),
+                    color: Color::rgba8(61, 139, 232, 117),
                     col: 4,
                     y_pos_top: -60 as f32,
                 },
                 Block {
-                    color: Color::rgba8(8, 210, 234, 204),
+                    color: Color::rgba8(61, 139, 232, 117),
                     col: 4,
                     y_pos_top: -90 as f32,
                 },
                 Block {
-                    color: Color::rgba8(222, 18, 55, 204),
+                    color: Color::rgba8(61, 139, 232, 117),
                     col: 4,
                     y_pos_top: -120 as f32,
                 },
@@ -497,22 +497,22 @@ impl T {
         Self {
             blocks: vec![
                 Block {
-                    color: Color::rgba8(43, 215, 54, 204),
+                    color: Color::rgba8(47, 94, 68, 196),
                     col: 3,
                     y_pos_top: -30 as f32,
                 },
                 Block {
-                    color: Color::rgba8(245, 40, 145, 204),
+                    color: Color::rgba8(47, 94, 68, 196),
                     col: 4,
                     y_pos_top: -30 as f32,
                 },
                 Block {
-                    color: Color::rgba8(8, 210, 234, 204),
+                    color: Color::rgba8(47, 94, 68, 196),
                     col: 5,
                     y_pos_top: -30 as f32,
                 },
                 Block {
-                    color: Color::rgba8(222, 18, 55, 204),
+                    color: Color::rgba8(47, 94, 68, 196),
                     col: 4,
                     y_pos_top: -60 as f32,
                 },
@@ -586,22 +586,22 @@ impl RightL {
         Self {
             blocks: vec![
                 Block {
-                    color: Color::rgba8(43, 215, 54, 204),
+                    color: Color::rgba8(249, 134, 36, 224),
                     col: 4,
                     y_pos_top: -30 as f32,
                 },
                 Block {
-                    color: Color::rgba8(245, 40, 145, 204),
+                    color: Color::rgba8(249, 134, 36, 224),
                     col: 5,
                     y_pos_top: -30 as f32,
                 },
                 Block {
-                    color: Color::rgba8(8, 210, 234, 204),
+                    color: Color::rgba8(249, 134, 36, 224),
                     col: 4,
                     y_pos_top: -60 as f32,
                 },
                 Block {
-                    color: Color::rgba8(222, 18, 55, 204),
+                    color: Color::rgba8(249, 134, 36, 224),
                     col: 4,
                     y_pos_top: -90 as f32,
                 },
@@ -675,22 +675,22 @@ impl LeftL {
         Self {
             blocks: vec![
                 Block {
-                    color: Color::rgba8(43, 215, 54, 204),
+                    color: Color::rgba8(176, 99, 246, 199),
                     col: 4,
                     y_pos_top: -30 as f32,
                 },
                 Block {
-                    color: Color::rgba8(245, 40, 145, 204),
+                    color: Color::rgba8(176, 99, 246, 199),
                     col: 5,
                     y_pos_top: -30 as f32,
                 },
                 Block {
-                    color: Color::rgba8(8, 210, 234, 204),
+                    color: Color::rgba8(176, 99, 246, 199),
                     col: 5,
                     y_pos_top: -60 as f32,
                 },
                 Block {
-                    color: Color::rgba8(222, 18, 55, 204),
+                    color: Color::rgba8(176, 99, 246, 199),
                     col: 5,
                     y_pos_top: -90 as f32,
                 },
@@ -744,22 +744,22 @@ impl RightSkew {
         Self {
             blocks: vec![
                 Block {
-                    color: Color::rgba8(43, 215, 54, 204),
+                    color: Color::rgba8(244, 127, 241, 166),
                     col: 3,
                     y_pos_top: -30 as f32,
                 },
                 Block {
-                    color: Color::rgba8(245, 40, 145, 204),
+                    color: Color::rgba8(244, 127, 241, 166),
                     col: 4,
                     y_pos_top: -30 as f32,
                 },
                 Block {
-                    color: Color::rgba8(8, 210, 234, 204),
+                    color: Color::rgba8(244, 127, 241, 166),
                     col: 4,
                     y_pos_top: -60 as f32,
                 },
                 Block {
-                    color: Color::rgba8(222, 18, 55, 204),
+                    color: Color::rgba8(244, 127, 241, 166),
                     col: 5,
                     y_pos_top: -60 as f32,
                 },
@@ -813,22 +813,22 @@ impl LeftSkew {
         Self {
             blocks: vec![
                 Block {
-                    color: Color::rgba8(43, 215, 54, 204),
+                    color: Color::rgba8(245, 96, 127, 225),
                     col: 4,
                     y_pos_top: -30 as f32,
                 },
                 Block {
-                    color: Color::rgba8(245, 40, 145, 204),
+                    color: Color::rgba8(245, 96, 127, 225),
                     col: 5,
                     y_pos_top: -30 as f32,
                 },
                 Block {
-                    color: Color::rgba8(8, 210, 234, 204),
+                    color: Color::rgba8(245, 96, 127, 225),
                     col: 3,
                     y_pos_top: -60 as f32,
                 },
                 Block {
-                    color: Color::rgba8(222, 18, 55, 204),
+                    color: Color::rgba8(245, 96, 127, 225),
                     col: 4,
                     y_pos_top: -60 as f32,
                 },
