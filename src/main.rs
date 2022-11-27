@@ -1,4 +1,4 @@
-use std::cmp;
+use  std::cmp;
 use std::ops::ControlFlow;
 use rand::Rng;
 // use rand::prelude::*;
@@ -9,6 +9,7 @@ use tetra::math::Vec2;
 // use tetra::window;
 use tetra::{Context, ContextBuilder, Event, State};
 // use image::GenericImageView;
+use num::Integer;
 
 mod filter_none;
 use filter_none::{filter_none, filter_none_mut};
@@ -49,32 +50,25 @@ impl State for GameState {
             block.y_pos_top += self.velocity
         });
 
-        let mut next = false;
-        self.lines.iter().for_each(|line| {
-            filter_none(line.blocks.iter()).try_for_each(|line_block| {
-                self.active_piece.blocks().iter().try_for_each(|active_block| {
-                    if active_block.y_pos_bottom() > (line.row * 30) as f32
-                        && line_block.col == active_block.col {
-                        next = true;
-                        return ControlFlow::Break(())
-                    }
-                    ControlFlow::Continue(())
-                })
-            });
-        });
+        let mut collision = false;
+        let mut reached_floor = false;
 
-        if !next {
+        if self.detect_collisions(&self.active_piece) {
+            collision = true
+        }
+
+        if !collision {
             self.active_piece.blocks().iter().try_for_each(|active_block| {
                 if active_block.y_pos_bottom() > 450 as f32 {
-                    next = true;
+                    reached_floor = true;
                     return ControlFlow::Break(())
                 }
                 ControlFlow::Continue(())
             });
         }
 
-        if next {
-            self.next_piece();
+        if collision || reached_floor {
+            self.next_piece()
         }
 
         Ok(())
@@ -128,9 +122,9 @@ impl State for GameState {
 
         match event {
             Event::KeyPressed{ key: key @ (Key::Right | Key::Left) }  => {
-                self.move_piece(key);
+                self.active_piece.shift(&self.lines, key);
             }
-            Event::KeyPressed{ key: Key::Space } => self.active_piece.rotate(),
+            Event::KeyPressed{ key: Key::Space } => self.active_piece.rotate(&self.lines),
             Event::KeyPressed { key: Key::Down } => self.drop_piece(),
             _ => (),
         }
@@ -199,56 +193,6 @@ impl GameState {
         self.velocity = 1 as f32;
     }
 
-    fn move_piece(&mut self, key: Key) {
-        let mut at_boundary = false;
-        self.active_piece.blocks().iter().try_for_each(|block| {
-            if block.col == 0 && key == Key::Left  || block.col == 9 && key == Key::Right {
-                at_boundary = true;
-                return ControlFlow::Break(())
-            }
-            ControlFlow::Continue(())
-        });
-        if at_boundary {
-            return
-        }
-
-        let mut blocked = false;
-        self.active_piece.blocks().iter().try_for_each(|block| {
-            let cur_row = block.y_pos_top as usize / 30;
-            let next_row = cmp::min(cur_row + 1, self.lines.len() - 1);
-            if key == Key::Left {
-                if let Some(_) = self.lines[cur_row].blocks[block.col as usize - 1] {
-                    blocked = true;
-                }
-                if let Some(_) = self.lines[next_row].blocks[block.col as usize - 1] {
-                    blocked = true;
-                }
-                return ControlFlow::Break(())
-            }
-            if key == Key::Right {
-                if let Some(_) = self.lines[cur_row].blocks[block.col as usize + 1] {
-                    blocked = true;
-                }
-                if let Some(_) = self.lines[next_row].blocks[block.col as usize + 1] {
-                    blocked = true;
-                }
-                return ControlFlow::Break(())
-            }
-            ControlFlow::Continue(())
-        });
-        if blocked {
-            return
-        }
-
-        self.active_piece.blocks_mut().iter_mut().for_each(|block| {
-            match key {
-                Key::Left => { block.col -= 1 },
-                Key::Right => { block.col += 1 },
-                _ => panic!("unexpected key type encountered: {:?} ", key),
-            }
-        });
-    }
-
     fn toggle_pause(&mut self) {
         match self.play_mode {
             PlayMode::Paused => self.play_mode = PlayMode::Running,
@@ -258,6 +202,24 @@ impl GameState {
 
     fn drop_piece(&mut self) {
         self.velocity = f32::max(self.velocity * 3 as f32, 10 as f32)
+    }
+
+    fn detect_collisions(&self, shadow_piece: &Box<dyn Piece>) -> bool {
+        let mut collision = false;
+        self.lines.iter().for_each(|line| {
+            filter_none(line.blocks.iter()).try_for_each(|line_block| {
+                shadow_piece.blocks().iter().try_for_each(|shadow_block| {
+                    if shadow_block.y_pos_bottom() > (line.row * 30) as f32
+                        && shadow_block.y_pos_top < (line.row * 30) as f32
+                        && line_block.col == shadow_block.col {
+                        collision = true;
+                        return ControlFlow::Break(())
+                    }
+                    ControlFlow::Continue(())
+                })
+            });
+        });
+        collision
     }
 }
 
@@ -305,10 +267,23 @@ struct Line {
     blocks: [Option<Block>; 10],
 }
 
-trait Piece {
+trait CloneBoxPiece {
+    fn clone_box(&self) -> Box<dyn Piece>;
+}
+
+impl<T> CloneBoxPiece for T
+    where
+        T: 'static + Piece + Clone,
+{
+    fn clone_box(&self) -> Box<dyn Piece> {
+        Box::new(self.clone())
+    }
+}
+
+trait Piece : CloneBoxPiece {
     fn blocks(&self) -> &Vec<Block>;
     fn blocks_mut(&mut self) -> &mut Vec<Block>;
-    fn rotate(&mut self);
+    fn do_rotate(&mut self);
 
     fn enforce_boundaries_after_rotation(&mut self) {
         let mut piece_shift = 0;
@@ -328,8 +303,197 @@ trait Piece {
             }
         }
     }
+
+    fn shift(&mut self, lines: &[Line; 15], key: Key) -> bool {
+        let mut at_boundary = false;
+        self.blocks().iter().try_for_each(|block| {
+            if block.col == 0 && key == Key::Left  || block.col == 9 && key == Key::Right {
+                at_boundary = true;
+                return ControlFlow::Break(())
+            }
+            ControlFlow::Continue(())
+        });
+        if at_boundary {
+            return false
+        }
+
+        let mut blocked = false;
+        self.blocks().iter().try_for_each(|block| {
+            let cur_row = block.y_pos_top as usize / 30;
+            let next_row = cmp::min(cur_row + 1, lines.len() - 1);
+            if key == Key::Left {
+                if let Some(_) = lines[cur_row].blocks[block.col as usize - 1] {
+                    blocked = true;
+                }
+                if let Some(_) = lines[next_row].blocks[block.col as usize - 1] {
+                    blocked = true;
+                }
+                return ControlFlow::Break(())
+            }
+            if key == Key::Right {
+                if let Some(_) = lines[cur_row].blocks[block.col as usize + 1] {
+                    blocked = true;
+                }
+                if let Some(_) = lines[next_row].blocks[block.col as usize + 1] {
+                    blocked = true;
+                }
+                return ControlFlow::Break(())
+            }
+            ControlFlow::Continue(())
+        });
+        if blocked {
+            return false
+        }
+
+        self.blocks_mut().iter_mut().for_each(|block| {
+            match key {
+                Key::Left => { block.col -= 1 },
+                Key::Right => { block.col += 1 },
+                _ => panic!("unexpected key type encountered: {:?} ", key),
+            }
+        });
+
+        true
+    }
+
+    // returns (right_shift, left_shift)
+    fn calculate_boundary_shifts(&self) -> (i32, i32) {
+        let mut right_shift = 0;
+        let mut left_shift = 0;
+        for block in self.blocks() {
+            if block.col < 0 {
+                let block_shift = -1 * block.col;
+                right_shift = cmp::max(right_shift, block_shift)
+            }
+            if block.col > 9 {
+                let block_shift = block.col - 9;
+                left_shift = cmp::max(left_shift, block_shift)
+            }
+        }
+        (right_shift, left_shift)
+    }
+
+    // returns (rightmost_col, leftmost_col)
+    fn calculate_edge_cols(&self) -> (i32, i32) {
+        let mut rightmost_col = 0;
+        let mut leftmost_col = 9;
+        for block in self.blocks() {
+            rightmost_col = cmp::max(rightmost_col, block.col);
+            leftmost_col = cmp::min(leftmost_col, block.col)
+        }
+        (rightmost_col, leftmost_col)
+    }
+
+    // return (right_shift, left_shift)
+    fn calculate_collision_shifts(&self, lines: &[Line; 15]) -> (i32, i32) {
+        let (rightmost_col, leftmost_col) = self.calculate_edge_cols();
+        let width = rightmost_col - leftmost_col + 1;
+        let even = Integer::is_even(&width);
+        
+        let mut center = if !even {
+            leftmost_col + width / 2
+        } else {
+            leftmost_col + width / 2 - 1
+        };
+        
+        let mut right_shift = 0;
+        let mut left_shift = 0;
+        for line in lines {
+            let mut right_shift_row = 0;
+            let mut left_shift_row = 0;
+            
+            for line_block in filter_none(line.blocks.iter()) {
+                for block in self.blocks() {
+                    if block.y_pos_bottom() > (line.row * 30) as f32
+                        && block.y_pos_top < (line.row * 30) as f32
+                        && line_block.col == block.col {
+                        
+                        if even {
+                            if block.col <= center {
+                                right_shift_row += 1;
+                            } else {
+                                left_shift_row += 1;
+                            }
+                        } else {
+                            if block.col < center {
+                                right_shift_row = 1;
+                            } else if block.col > center {
+                                left_shift_row = 1;
+                            } else {
+                                panic!("collision at center of odd-width piece")
+                            }
+                        }
+                    }
+                }
+            }
+            
+            right_shift = cmp::max(right_shift, right_shift_row);
+            left_shift = cmp::max(left_shift, left_shift_row);
+        }
+
+        (right_shift, left_shift)
+    }
+
+    fn rotate(&mut self, lines: &[Line; 15])
+    {
+        let mut shadow = self.clone_box();
+
+        shadow.do_rotate();
+
+        let (boundary_right_shift, boundary_left_shift) = shadow.calculate_boundary_shifts();
+        let (collision_right_shift, collision_left_shift) = shadow.calculate_collision_shifts(lines);
+
+        let shift_right = cmp::max(boundary_right_shift, collision_right_shift);
+        let shift_left = cmp::max(boundary_left_shift, collision_left_shift);
+
+        if shift_right != 0 && shift_left != 0 {
+            return
+        }
+
+        let mut shadow_shift_successful = true;
+        let mut shadow_shift_right = shift_right;
+        let mut shadow_shift_left = shift_left;
+        while shadow_shift_right != 0 || shadow_shift_left != 0 {
+            if shadow_shift_right != 0 {
+                if shadow.shift(lines, Key::Right) {
+                    shadow_shift_right -= 1;
+                } else {
+                    shadow_shift_successful = false;
+                    break
+                }
+            }
+            if shadow_shift_left != 0 {
+                if shadow.shift(lines, Key::Left) {
+                    shadow_shift_left -= 1;
+                } else {
+                    shadow_shift_successful = false;
+                    break
+                }
+            }
+        }
+
+        if !shadow_shift_successful {
+            return
+        }
+
+        self.do_rotate();
+
+        let mut real_shift_right = shift_right;
+        let mut real_shift_left = shift_left;
+        while real_shift_right != 0 || real_shift_left != 0 {
+            if real_shift_right != 0 {
+                self.shift(lines, Key::Right);
+                real_shift_right -= 1
+            }
+            if real_shift_left != 0 {
+                self.shift(lines, Key::Left);
+                real_shift_left -= 1
+            }
+        }
+    }
 }
 
+#[derive(Clone)]
 struct Square {
     blocks: Vec<Block>,
 }
@@ -339,7 +503,7 @@ impl Piece for Square {
         &self.blocks
     }
     fn blocks_mut(&mut self) -> &mut Vec<Block> { &mut self.blocks }
-    fn rotate(&mut self) {}
+    fn do_rotate(&mut self) {}
 }
 
 impl Square {
@@ -371,6 +535,7 @@ impl Square {
     }
 }
 
+#[derive(Clone)]
 struct Straight {
     blocks: Vec<Block>,
     rotation: u32,
@@ -381,7 +546,8 @@ impl Piece for Straight {
         &self.blocks
     }
     fn blocks_mut(&mut self) -> &mut Vec<Block> { &mut self.blocks }
-    fn rotate(&mut self) {
+
+    fn do_rotate(&mut self) {
         match self.rotation {
             0 => {
                 self.blocks_mut()[0].col += -1;
@@ -425,7 +591,7 @@ impl Piece for Straight {
             },
             _ => panic!("received unexpected rotation value: {}", self.rotation),
         }
-        self.enforce_boundaries_after_rotation();
+
         self.rotation = (self.rotation + 90).rem_euclid(360);
     }
 }
@@ -460,6 +626,7 @@ impl Straight {
     }
 }
 
+#[derive(Clone)]
 struct T {
     blocks: Vec<Block>,
     rotation: u32,
@@ -470,7 +637,8 @@ impl Piece for T {
         &self.blocks
     }
     fn blocks_mut(&mut self) -> &mut Vec<Block> { &mut self.blocks }
-    fn rotate(&mut self) {
+
+    fn do_rotate(&mut self) {
         match self.rotation {
             0 => {
                 self.blocks_mut()[0].col += 1;
@@ -549,6 +717,7 @@ impl T {
     }
 }
 
+#[derive(Clone)]
 struct RightL {
     blocks: Vec<Block>,
     rotation: u32,
@@ -559,7 +728,8 @@ impl Piece for RightL {
         &self.blocks
     }
     fn blocks_mut(&mut self) -> &mut Vec<Block> { &mut self.blocks }
-    fn rotate(&mut self) {
+
+    fn do_rotate(&mut self) {
         match self.rotation {
             0 => {
                 self.blocks_mut()[1].col += -1;
@@ -638,6 +808,7 @@ impl RightL {
     }
 }
 
+#[derive(Clone)]
 struct LeftL {
     blocks: Vec<Block>,
     rotation: u32,
@@ -648,7 +819,8 @@ impl Piece for LeftL {
         &self.blocks
     }
     fn blocks_mut(&mut self) -> &mut Vec<Block> { &mut self.blocks }
-    fn rotate(&mut self) {
+
+    fn do_rotate(&mut self) {
         match self.rotation {
             0 => {
                 self.blocks_mut()[0].col += 1;
@@ -727,6 +899,7 @@ impl LeftL {
     }
 }
 
+#[derive(Clone)]
 struct RightSkew {
     blocks: Vec<Block>,
     rotation: u32,
@@ -737,7 +910,8 @@ impl Piece for RightSkew {
         &self.blocks
     }
     fn blocks_mut(&mut self) -> &mut Vec<Block> { &mut self.blocks }
-    fn rotate(&mut self) {
+
+    fn do_rotate(&mut self) {
         match self.rotation {
             0 => {
                 self.blocks_mut()[0].col += 1;
@@ -796,6 +970,7 @@ impl RightSkew {
     }
 }
 
+#[derive(Clone)]
 struct LeftSkew {
     blocks: Vec<Block>,
     rotation: u32,
@@ -806,7 +981,8 @@ impl Piece for LeftSkew {
         &self.blocks
     }
     fn blocks_mut(&mut self) -> &mut Vec<Block> { &mut self.blocks }
-    fn rotate(&mut self) {
+
+    fn do_rotate(&mut self) {
         match self.rotation {
             0 => {
                 self.blocks_mut()[1].col += -1;
